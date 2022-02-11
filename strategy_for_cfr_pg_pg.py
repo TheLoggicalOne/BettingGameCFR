@@ -1,24 +1,29 @@
 # ---------------------------------------------- STATE OF THIS CODE -------------------------------------------------- #
 # STATUS OF CURRENTS CODES: works perfectly, tested and validated with examples
-#
-# FUTURE PLAN: documentation
-#
+# lAST FEATURES: save and read StrategyForCfr objects on path, run vanilla_CFR after stop or shutdown from last save
+# FUTURE PLANS:
+# 1)Make family runs work with new run with save and read from path
+# 2)Add progress bar to run with saves
+# 3)Possible name and path changes to make easier to extract StrategyForCfr game parameters from saved arrays names
+# 4)Complete case of initialize from StrategyForCfr object
+# 5)documentation
 # DOCUMENTATION: zero, need to copy from strategy and then many editing and adding
-#
-# LAST UPDATE OF THI BOX: dec 31 22:19 - after completing strategy_for_cfr, family_of_strategy_for_cfr and validating
-#                         their results by checking kuhn family of games with MY_FAMILY_OF_BETS
+# LAST UPDATE OF THI BOX: Feb 11 21:27 - After completion of auto save and read and continue of StrategyForCfr
+# arrays, and syncing strategy_for_cfr.py and strategy_for_cfr_pg.py and strategy_for_cfr_pg_pg
+# ONE BEFORE LAST UPDATE OF THIS BOX: dec 31 22:19 - after completing strategy_for_cfr, family_of_strategy_for_cfr and
+# validating their results by checking kuhn family of games with MY_FAMILY_OF_BETS
 # -------------------------------------------------------------------------------------------------------------------- #
 import os
 import time
 
 import numpy
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 from betting_games_for_cfr import BettingGame, BettingGameWorldTree, BettingGamePublicTree
 from utilities import MY_FAMILY_OF_BETS, STANDARD_FULL_FAMILY_OF_BETS, STANDARD_FULL_FAMILY_OF_HANDS, SMALL_SAVE_POINTS
 from utilities import STANDARD_FULL_FAMILY_OF_SAVE_POINTS_396, STANDARD_REDUCED_FAMILY_OF_SAVE_POINT_266
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
@@ -73,10 +78,12 @@ class StrategyForCfr:
 
         self.name = 'S' + '_' + self.game.name + '_' + self.naming_key
 
-
-
         self.strategy_data_array_path = os.path.join(ARRAYS_PATH, self.name + '.npy')
         self.save_points_array_path = os.path.join(ARRAYS_PATH, self.name + '_saves_points' + '.npy')
+
+#--------------------------------------------------------------------------------------------------------------------- #
+#---------------------------------------- INITIALIZING MAIN ATTRS: ----------------------------------------------------#
+#---CUMULATIVE_REGRET, CUMULATIVE_STRATEGY, STRATEGY_DATA_ARRAY, SAVING_POINTS_ARRAY, STRATEGY_BASE, INITIAL_STRATEGY--#
 
         # Determining type of initialization
         self.initialize_from_path = os.path.exists(self.strategy_data_array_path)
@@ -84,8 +91,8 @@ class StrategyForCfr:
         self.initialize_from_ndarray = ((initial_strategy is np.ndarray) or (initial_strategy is None)) and (
             not self.initialize_from_path)
         self.initialize_from_StrategyCfr = type(initial_strategy) is StrategyForCfr
-        # fucking steps:
 
+        # general initialization plan:
         # no matter what case has happened above load corresponding saved arrays to 2 attrs of class
         # populate related strategy attrs using this 2 arrays
         # note that  self.strategy_data_path exists if and only if self.save_points_file_path exists
@@ -115,7 +122,7 @@ class StrategyForCfr:
         # with dimensions of (2*number_of_hands*number_of_nodes) corresponding to cum_reg and cum_strat and
         # average_strat
 
-        self.save_points_array = np.load(self.save_points_array_path )
+        self.save_points_array = np.load(self.save_points_array_path)
         # save_points_array is n*4 np.array that its first row is in order: last filled index,
         # last saved iteration, Total time, heritage code and other rows of 4 cols are in order:
         # save points, times returned by run_base_cfr, time.perf_counter_ns(), time.process_time_ns()
@@ -127,7 +134,7 @@ class StrategyForCfr:
         self.iteration = 0
 
         self.cumulative_regret = self.strategy_data_array[self.last_saved_index_in_saved_arrays_1d0d[0],
-                                 0, :, :, :].copy()
+                                                          0, :, :, :].copy()
         self.cumulative_strategy = self.strategy_data_array[self.last_saved_index_in_saved_arrays_1d0d[0],
                                                             1, :, :, :].copy()
 
@@ -165,6 +172,7 @@ class StrategyForCfr:
                 self.strategy_data_array[0, 1, :, :, :] = self.cumulative_strategy.copy()
                 self.strategy_data_array[0, 2, :, :, :] = self.average_strategy()
 
+# -------------------------------------------------------------------------------------------------------------------- #
 # ------------------------------- SAVING AND READING INTO NUMPY ARRAYS NPZ FILE -------------------------------------- #
 
 
@@ -174,6 +182,7 @@ class StrategyForCfr:
         if save_point is None:
             self.cumulative_regret = arr_data
 
+# -------------------------------------------------------------------------------------------------------------------- #
 # ---------------------------- MAIN METHODS: REACH PROBABILITIES OF GIVEN STRATEGY  ---------------------------------- #
 
     # 9used
@@ -202,7 +211,7 @@ class StrategyForCfr:
     def player_reach_probs_of_check_decision_branch_info_nodes(self, position):
         """ return reach probability columns of decision nodes in check branch of game for given player
 
-        First column corresponds of each player table to to column 1 in strategy_base  """
+        First column corresponds of each player table to column 1 in strategy_base  """
         return np.cumprod(self.check_branch_strategy(position), axis=1)
 
     # 8used
@@ -292,7 +301,7 @@ class StrategyForCfr:
         for op_hand in range(self.number_of_hands):
             for ip_hand in range(self.number_of_hands):
                 for node in self.game.node[1:]:
-                    R[op_hand, ip_hand, node,] = self.reach_prob_of_world_node(node, [op_hand, ip_hand])
+                    R[op_hand, ip_hand, node, ] = self.reach_prob_of_world_node(node, [op_hand, ip_hand])
         return R
 
     # TODO: 5 - possible speed improvement - analyze possibility of vectorization
@@ -388,6 +397,7 @@ class StrategyForCfr:
                 ) * self.cf_reach_probs_of_world_nodes_table(p)[:, :, node]
         return cf_r
 
+# -------------------------------------------------------------------------------------------------------------------- #
 # ------------------------------------------UPDATING REGRETS AND STRATEGY--------------------------------------------- #
     # 0used
     # so far all the regrets are from op perspective,
@@ -443,6 +453,7 @@ class StrategyForCfr:
                 strat[turn, :, child] = cr_positive[turn, :, child] / sum_r
         return strat
 
+# -------------------------------------------------------------------------------------------------------------------- #
 # -------------------------------------------------RUN ITERATIONS----------------------------------------------------- #
 
     def average_strategy(self):
@@ -554,22 +565,8 @@ class StrategyForCfr:
         A[2:3, :, :, :] = self.cumulative_strategy
         A[3:4, :, :, :] = self.average_strategy()
 
-
+# -------------------------------------------------------------------------------------------------------------------- #
 # ------------------------------- INITIALIZING STRATEGIC BETTING GAMES WITH USUAL SIZES ------------------------------ #
-
-def create_family_of_bets(n_bets, max_big_bets, max_huge_bets):
-    bets = np.array([int(100 * i / 10) for i in range(n_bets)])
-    big_bets = 100 * np.array([i for i in range(3, max_big_bets)])
-    huge_bets = 100 * np.array([3 ** i for i in range(3, max_huge_bets)])
-    return np.hstack([bets, big_bets, huge_bets])
-
-
-def create_family_of_hands(small_max, medium_max, big_max, huge_max):
-    small_hands = list(range(3, small_max))
-    medium_hands = list(range(small_max, medium_max, 5))
-    big_hands = list(range(medium_max, big_max, 20))
-    huge_max = list(range(big_max, huge_max, 100))
-    return np.array(small_hands + medium_hands + big_hands + huge_max)
 
 
 def bet_family_cfr_run_time(max, number_of_hands, sub, bet_family=MY_FAMILY_OF_BETS, iterations=10):
@@ -597,6 +594,8 @@ def max_bet_hand_family_cfr_run_time(sub, max_family=range(2, 21, 2), n_hands_fa
     return matrix
 
 
+# -------------------------------------------------------------------------------------------------------------------- #
+# ------------------------ INITIALIZING SPECIFIC EXAMPLES FOR BETTING GAMES WITH USUAL SIZES ------------------------- #
 
 # if __name__ == '__main__':
     # KUHN_ORIG = BettingGame(2, {i: 1 for i in range(3)}, False, 1)
