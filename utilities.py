@@ -94,7 +94,16 @@ sr = create_sequence_by_2_5_10(12, 6)
 STANDARD_REDUCED_FAMILY_OF_SAVE_POINT_266 = sr
 
 SMALL_SAVE_POINTS = create_points(10, 6)
-s.shape
-sr.shape
+
+
+# -------------------------------------------------------------------------------------------------------------------- #
+# --------------------------------- INITIALIZING AND WORKING ON SPECIFIC EXAMPLES ------------------------------------ #
+
+if __name__ == '__main__':
+    inp = input('Should I run examples of this module?')
+    yeses = {'Yes', 'yes', 'YES', 'y', 'Y'}
+    if inp in yeses:
+        pass
+
 
 
