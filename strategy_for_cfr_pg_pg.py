@@ -13,21 +13,23 @@ import time
 
 import numpy
 import numpy as np
+
+
 from betting_games_for_cfr import BettingGame, BettingGameWorldTree, BettingGamePublicTree
-from utilities import START_NODE, MY_FAMILY_OF_BETS, create_points
+from utilities import MY_FAMILY_OF_BETS, STANDARD_FULL_FAMILY_OF_BETS, STANDARD_FULL_FAMILY_OF_HANDS, SMALL_SAVE_POINTS
+from utilities import STANDARD_FULL_FAMILY_OF_SAVE_POINTS_396, STANDARD_REDUCED_FAMILY_OF_SAVE_POINT_266
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
-
-np.set_printoptions(precision=None, threshold=None, edgeitems=None, linewidth=600, suppress=None, nanstr=None,
+np.set_printoptions(precision=None, threshold=10000, edgeitems=None, linewidth=600, suppress=None, nanstr=None,
 
                     infstr=None, formatter=None, sign=None, floatmode=None, legacy=None)
 
-n_of_saves_for_single_bet = 10000
+n_of_saves_for_single_bet = STANDARD_FULL_FAMILY_OF_SAVE_POINTS_396.size
 n_of_saves = n_of_saves_for_single_bet
-ssr = 5
-SMALL_SAVE_POINTS = create_points(10, 5)
+
+
 
 
 
@@ -40,12 +42,13 @@ os.makedirs(ARRAYS_PATH, exist_ok=True)
 
 class StrategyForCfr:
 
-    def __init__(self, game, initial_strategy=None, naming_key='', saving_points=SMALL_SAVE_POINTS):
+    def __init__(self, game, initial_strategy=None, naming_key='', saving_points=STANDARD_FULL_FAMILY_OF_SAVE_POINTS_396
+                 ):
         self.game = game
         self.naming_key = naming_key
         self.number_of_hands = self.game.number_of_hands
         self.number_of_nodes = self.game.public_tree.number_of_nodes
-        self.saving_points = saving_points
+        self.saving_points = saving_points.flatten()
 
         # Game nodes and their basic information
         self.node = self.game.node
@@ -75,28 +78,36 @@ class StrategyForCfr:
         self.strategy_data_array_path = os.path.join(ARRAYS_PATH, self.name + '.npy')
         self.save_points_array_path = os.path.join(ARRAYS_PATH, self.name + '_saves_points' + '.npy')
 
+        # Determining type of initialization
+        self.initialize_from_path = os.path.exists(self.strategy_data_array_path)
+        self.initialize_from_None = (initial_strategy is None) and (not self.initialize_from_path)
+        self.initialize_from_ndarray = ((initial_strategy is np.ndarray) or (initial_strategy is None)) and (
+            not self.initialize_from_path)
+        self.initialize_from_StrategyCfr = type(initial_strategy) is StrategyForCfr
         # fucking steps:
 
         # no matter what case has happened above load corresponding saved arrays to 2 attrs of class
-        # populate related strategt attrs using this 2 arrays
+        # populate related strategy attrs using this 2 arrays
         # note that  self.strategy_data_path exists if and only if self.save_points_file_path exists
 
         # check if there are numpy arrays on paths
         # if no array save appropriate arrays, all with zeros
-        if not os.path.exists(self.strategy_data_array_path):
-            if initial_strategy is None:
+        if not self.initialize_from_path:
+            if self.initialize_from_None:
                 initial_strategy = self.uniform_strategy()
-                self.initial_strategy = initial_strategy.copy()
+
+            if self.initialize_from_ndarray:
+                self.initial_strategy = initial_strategy
                 self.strategy_base = self.initial_strategy.copy()
-
-            if type(initial_strategy) is np.ndarray:
-
                 np.save(self.strategy_data_array_path,
                         np.zeros((n_of_saves, 3, 2, self.number_of_hands, self.number_of_nodes)))
-                np.save(self.save_points_array_path, np.zeros((n_of_saves, 4)))
-            else:
-                np.save(self.strategy_data_array_path, initial_strategy.strategy_data_array)
-                np.save(self.save_points_array_path, initial_strategy.save_points_array)
+                np.save(self.save_points_array_path, np.zeros((n_of_saves, 5), dtype=np.uint64))
+
+            # TODO: for now, I don't consider this FUCKING case BITCH, to be completed!
+            # else:  # This case is useful when you want to continue calc of instance of StrategyForCfr, but you want to
+            #     # save your result in a different path
+            #     np.save(self.strategy_data_array_path, initial_strategy.strategy_data_array)
+            #     np.save(self.save_points_array_path, initial_strategy.save_points_array)
 
 
         self.strategy_data_array = np.load(self.strategy_data_array_path)
@@ -105,49 +116,63 @@ class StrategyForCfr:
         # average_strat
 
         self.save_points_array = np.load(self.save_points_array_path )
-        # save_points_array is n*4 np.array that its first row is in order: last filled index, ,
-        # last saved iteration, Total time, heritrage code and other rows of 4 cols are in order:
-        # save points, time.perf_counter, time.process_time(), time returned by run_base_cfr
+        # save_points_array is n*4 np.array that its first row is in order: last filled index,
+        # last saved iteration, Total time, heritage code and other rows of 4 cols are in order:
+        # save points, times returned by run_base_cfr, time.perf_counter_ns(), time.process_time_ns()
 
         self.last_saved_index_in_saved_arrays_1d0d = self.save_points_array[0:1, 0]
         self.age_1d0d = self.save_points_array[0:1, 1]
+        self.this_run_start_age = self.save_points_array[0, 1]
+        self.this_run_start_index = self.save_points_array[0, 0]
         self.iteration = 0
 
-
-        self.cumulative_strategy = self.strategy_data_array[self.last_saved_index_in_saved_arrays_1d0d[0],
-                                                            0, :, :, :].copy()
         self.cumulative_regret = self.strategy_data_array[self.last_saved_index_in_saved_arrays_1d0d[0],
+                                 0, :, :, :].copy()
+        self.cumulative_strategy = self.strategy_data_array[self.last_saved_index_in_saved_arrays_1d0d[0],
                                                             1, :, :, :].copy()
-        if type(initial_strategy) is np.ndarray:
+
+        # Up to now, initialization of strategy has different ways:
+
+        # 1) When no path exists, and strat will be initialized from given np.ndarray which is usually uniform or
+        # is a given ndarray, we should do following:
+        if self.initialize_from_ndarray:
             self.update_cumulative_regrets()
+            self.strategy_data_array[0, 0, :, :, :] = self.cumulative_regret.copy()
+            # check to see if cum_strat is previous strat
+            self.strategy_data_array[0, 1, :, :, :] = self.cumulative_strategy.copy()
+            self.strategy_data_array[0, 2, :, :, :] = self.average_strategy()
+            assert np.allclose(self.average_strategy()[..., 1:], self.strategy_base[..., 1:])
 
-            # self.update_strategy()
-            # self.iteration += 1
-
-
-# case1) start from numpy.ndarray:
-#
-#
-# case2) start from strategy with array records
-
-
-
-
+        # 2) when we are reading from the path
+        if self.initialize_from_path:
+            # Case that nontrivial data has saved at more than one saving point(not only start point)
+            if self.last_saved_index_in_saved_arrays_1d0d[0] > 0:
+                self.initial_strategy = self.get_strat_from_cumulative_regret(
+                    self.strategy_data_array[int(self.last_saved_index_in_saved_arrays_1d0d[0]-1), 0, :, :, :])
+                self.strategy_base = self.initial_strategy.copy()
+            # Case that only starting save point has been saved
+            # TODO: Complete this unusual case
+            elif self.save_points_array[0, 1] > 0:
+                pass
+            # Case that all saved arrays are zero, and reading from path is useless(this case is equivalent to no path
+            # and initial_strategy=None
+            elif self.save_points_array[0, 1] == 0:
+                self.initial_strategy = self.uniform_strategy()
+                self.strategy_base = self.initial_strategy.copy()
+                self.update_cumulative_regrets()
+                self.strategy_data_array[0, 0, :, :, :] = self.cumulative_regret.copy()
+                # check to see if cum_strat is previous strat
+                self.strategy_data_array[0, 1, :, :, :] = self.cumulative_strategy.copy()
+                self.strategy_data_array[0, 2, :, :, :] = self.average_strategy()
 
 # ------------------------------- SAVING AND READING INTO NUMPY ARRAYS NPZ FILE -------------------------------------- #
+
+
     def sync_from_strategy_data(self, save_point=None):
         arr_points = np.load(self.save_points_array_path)
         arr_data = np.load(self.strategy_data_array_path)
         if save_point is None:
             self.cumulative_regret = arr_data
-
-
-
-
-
-
-
-
 
 # ---------------------------- MAIN METHODS: REACH PROBABILITIES OF GIVEN STRATEGY  ---------------------------------- #
 
@@ -386,6 +411,25 @@ class StrategyForCfr:
                 out=np.full((self.number_of_hands, l), 1 / l),
                 where=(b_sum_r != 0))
 
+    def get_strat_from_cumulative_regret(self, cum_regret=None):
+        if cum_regret is None:
+            cum_regret = self.cumulative_regret
+        cr = cum_regret.copy()
+        strat = np.zeros_like(cr)
+        cr_positive = np.where(cr >= 0, cr, 0)
+        for index, d_node in enumerate(self.decision_node):
+            turn = self.turn[d_node]
+            children = self.decision_node_children[index]
+            l = len(children)
+            sum_r = np.sum(cr_positive[turn, :, children[0]:children[0] + l], axis=1)[:, np.newaxis]
+            # sum_r_nonzero = np.where(sum_r > 0, sum_r, 1 / l)
+            b_sum_r = np.broadcast_to(sum_r, (self.number_of_hands, l))
+            strat[turn, :, children[0]:children[0] + l] = np.divide(
+                cr_positive[turn, :, children[0]:children[0] + l], b_sum_r,
+                out=np.full((self.number_of_hands, l), 1 / l),
+                where=(b_sum_r != 0))
+        return strat
+
     def updated_strategy(self):
         strat = np.ones((2, self.number_of_hands, self.number_of_nodes))
         cr = self.cumulative_regret.copy()
@@ -439,20 +483,51 @@ class StrategyForCfr:
         avg_time_per_1000 = duration / (number_of_iterations / 1000)
         return avg_time_per_1000
 
-    def run_vcfr_with_save(self, saving_points=None, start_age_index=0, progress_bar=True):
+    def run_base_vcfr(self, number_of_iterations):
+        t_perf_ns_start_loc = time.perf_counter_ns()
+        t_process_ns_start_loc = time.process_time_ns()
+        for t in range(number_of_iterations):
+            self.iteration += 1
+            self.update_strategy()
+            self.update_cumulative_regrets()
+        return time.perf_counter_ns() - t_perf_ns_start_loc, time.process_time_ns() - t_process_ns_start_loc
+
+    def run_vcfr_with_save(self, saving_points=None, start_age_index=None):
         if saving_points is None:
             saving_points = self.saving_points
-        for index_age in range(start_age_index, len(saving_points)):
-            self.run_base_cfr(saving_points[index_age + 1] - saving_points[index_age])
-            V[index_age, 0, :, :, :] = self.cumulative_regret.copy()
-            V[index_age, 1, :, :, :] = self.cumulative_strategy.copy()
-            V[index_age, 2, :, :, :] = self.average_strategy().copy()
-            np.save(KF_ARRAY_NAMES[index_bet], V)
-        print(f"ran vcfr for {self.game.name}")
+        if start_age_index is None:
+            start_age_index = self.last_saved_index_in_saved_arrays_1d0d[0]
+        for index_age in range(int(start_age_index+1), len(saving_points)):
+            # print(f'Start Of Running {saving_points[index_age-1]} UP TO {saving_points[index_age]}')
+            # print("\n")
+            t_perf_ns_start = time.perf_counter_ns()
+            t_process_ns_start = time.process_time_ns()
+            rt = self.run_base_vcfr(saving_points[index_age] - saving_points[index_age-1])
+
+            self.strategy_data_array[index_age, 0, :, :, :] = self.cumulative_regret.copy()
+            self.strategy_data_array[index_age, 1, :, :, :] = self.cumulative_strategy.copy()
+            self.strategy_data_array[index_age, 2, :, :, :] = self.average_strategy().copy()
+
+            self.save_points_array[index_age, 0] = saving_points[index_age]
+            self.save_points_array[index_age, 1] = rt[0]
+            self.save_points_array[index_age, 2] = rt[1]
+            self.save_points_array[index_age, 3] = time.perf_counter_ns() - t_perf_ns_start
+            self.save_points_array[index_age, 4] = time.process_time_ns() - t_process_ns_start
+
+            self.save_points_array[0, 0] = index_age
+            self.save_points_array[0, 1] = saving_points[index_age]
+
+            np.save(self.strategy_data_array_path, self.strategy_data_array)
+            np.save(self.save_points_array_path, self.save_points_array)
+            print("\n")
+            print(f"ran vcfr for {self.name} from {saving_points[index_age-1]} UP TO {saving_points[index_age]}"
+                  f"in {(time.perf_counter_ns()-t_perf_ns_start)/1e9} Seconds")
+            print("\n")
 
 
 # -------------------------------------------------------------------------------------------------------------------- #
 # ----------------------------- STRATEGY INITIALIZING TOOLS AND SPECIFIC STRATEGIES ---------------------------------- #
+
 
     def uniform_strategy(self):
         S = np.ones((2, self.number_of_hands, self.number_of_nodes))
@@ -489,18 +564,12 @@ def create_family_of_bets(n_bets, max_big_bets, max_huge_bets):
     return np.hstack([bets, big_bets, huge_bets])
 
 
-STANDARD_FULL_FAMILY_OF_BETS = create_family_of_bets(21, 10, 10)
-
-
 def create_family_of_hands(small_max, medium_max, big_max, huge_max):
     small_hands = list(range(3, small_max))
     medium_hands = list(range(small_max, medium_max, 5))
     big_hands = list(range(medium_max, big_max, 20))
     huge_max = list(range(big_max, huge_max, 100))
     return np.array(small_hands + medium_hands + big_hands + huge_max)
-
-
-STANDARD_FULL_FAMILY_OF_HANDS = create_family_of_hands(20, 60, 200, 900)
 
 
 def bet_family_cfr_run_time(max, number_of_hands, sub, bet_family=MY_FAMILY_OF_BETS, iterations=10):
@@ -528,10 +597,22 @@ def max_bet_hand_family_cfr_run_time(sub, max_family=range(2, 21, 2), n_hands_fa
     return matrix
 
 
-if __name__ == '__main__':
-    KUHN_ORIG = BettingGame(2, {i: 1 for i in range(3)}, False, 1)
-    KUHN_ORIG_STRATEGY = StrategyForCfr(KUHN_ORIG)
-    sb = np.load(KUHN_ORIG_STRATEGY.strategy_data_array_path)
+
+# if __name__ == '__main__':
+    # KUHN_ORIG = BettingGame(2, {i: 1 for i in range(3)}, False, 1)
+    # KUHN_ORIG_STRATEGY = StrategyForCfr(KUHN_ORIG)
+    # KUHN_ORIG_STRATEGY_2 = StrategyForCfr(KUHN_ORIG, naming_key='2')
+    # s = KUHN_ORIG_STRATEGY
+    # s2 = KUHN_ORIG_STRATEGY_2
+    #
+    # KUHN_ORIG_REAL = BettingGame(2, {i: 1 for i in range(3)}, False, 0.5)
+    # KUHN_ORIG_REAL_STRATEGY = StrategyForCfr(KUHN_ORIG_REAL)
+    # kr = KUHN_ORIG_REAL_STRATEGY
+    # BIG_GAME = BettingGame(20, {i:1 for i in range(400)}, True, 27)
+    # BIG_GAME_STRATEGY = StrategyForCfr(BIG_GAME)
+
+
+    # sb = np.load(KUHN_ORIG_STRATEGY.strategy_data_array_path)
 # kost = KUHN_ORIG_STRATEGY.run_base_cfr_with_progress(100000)
 # t_of_h3to100_for_2_f = bet_hand_family_cfr_run_time(2, False, range(3, 101), range(1, 2), 1000)
 # t_of_hSFFH_for_2_f = bet_hand_family_cfr_run_time(2, False, STANDARD_FULL_FAMILY_OF_HANDS, range(1, 2), 1000)
