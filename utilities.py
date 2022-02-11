@@ -1,5 +1,7 @@
 # TO BE COMPLETED
 import numpy as np
+import time
+import datetime
 
 np.set_printoptions(precision=None, threshold=None, edgeitems=None, linewidth=600, suppress=None, nanstr=None,
 
@@ -38,9 +40,6 @@ def create_family_of_bets(n_bets, max_big_bets, max_huge_bets):
     return np.hstack([bets, big_bets, huge_bets])
 
 
-a = create_family_of_bets(21, 10, 10)
-STANDARD_FULL_FAMILY_OF_BETS = a
-
 
 
 def create_family_of_hands(small_max, medium_max, big_max, huge_max):
@@ -51,7 +50,6 @@ def create_family_of_hands(small_max, medium_max, big_max, huge_max):
     return np.array(small_hands + medium_hands + big_hands + huge_max)
 
 
-STANDARD_FULL_FAMILY_OF_HANDS = create_family_of_hands(20, 60, 200, 900)
 
 
 
@@ -67,30 +65,36 @@ def create_hands_dealings(OPDeck, IPDeck, substitution=True):
     return cards_dealings
 
 
-# SAVING POINTS
-n_of_saves_for_single_bet = 50_000
-n_of_saves = n_of_saves_for_single_bet
-ssr = 5
-SMALL_SAVE_POINTS = np.array([[(10 ** p) * i for i in range(1, 10)] for p in range(1, ssr+1)])
-
-
 def create_points(base, roof, start_shift=0):
-    return np.array([[(start_shift+base ** p) * i for i in range(1, base)] for p in range(1, roof + 1)])
-
-def create_sequence_of_numbers(base_step=1, step_multiplier=2, period_length_base=10, n_periods=10):
-    L = np.zeros((n_periods*period_length_base))
-    index = 0
-    step = 1
-    for p in range(n_periods):
-        step = 2 ** p * base_step
-        for s in range(period_length_base):
-            L[index] = L[index-1] + step
-            index += 1
-    return L.reshape(n_periods, period_length_base)
+    return np.array([[(start_shift+base ** p) * i for i in range(1, base)] for p in range(0, roof)])
 
 
+def create_sequence_by_2_5_10(max_power_of_10=10, min_power_of_10=1, initial_points=np.arange(10)):
+    points = create_points(10, min_power_of_10).flatten()
+    points = np.hstack([np.array([0]), points])
+    for n in range(max(min_power_of_10, 1), max_power_of_10):
+        by_step_10 = (10 ** (n-1)) * np.arange(10, 20, 1)
+        by_step_20 = (10 ** (n-1)) * np.arange(20, 50, 2)
+        by_step_50 = (10 ** (n-1)) * np.arange(50, 100, 5)
+        points = np.hstack([points, by_step_10, by_step_20, by_step_50])
+    points = np.hstack([points, np.array([10 ** max_power_of_10])])
+    return points.T[:, np.newaxis]
 
-points_10_5 = create_points(10, 5)
-L = create_sequence_of_numbers()
-L3 = create_sequence_of_numbers(base_step=10, step_multiplier=5, period_length_base=10, n_periods=50)
-L250 = create_sequence_of_numbers(base_step=10, step_multiplier=5, period_length_base=10, n_periods=250)
+
+a = create_family_of_bets(21, 10, 10)
+
+STANDARD_FULL_FAMILY_OF_BETS = a
+
+STANDARD_FULL_FAMILY_OF_HANDS = create_family_of_hands(20, 60, 200, 900)
+
+s = create_sequence_by_2_5_10(12)
+STANDARD_FULL_FAMILY_OF_SAVE_POINTS_396 = s
+
+sr = create_sequence_by_2_5_10(12, 6)
+STANDARD_REDUCED_FAMILY_OF_SAVE_POINT_266 = sr
+
+SMALL_SAVE_POINTS = create_points(10, 6)
+s.shape
+sr.shape
+
+
