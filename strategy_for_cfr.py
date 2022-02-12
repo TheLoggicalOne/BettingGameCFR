@@ -26,7 +26,7 @@ from utilities import MY_FAMILY_OF_BETS, STANDARD_FULL_FAMILY_OF_BETS, STANDARD_
 from utilities import STANDARD_FULL_FAMILY_OF_SAVE_POINTS_396, STANDARD_REDUCED_FAMILY_OF_SAVE_POINT_266
 from tqdm import tqdm
 
-
+# This Is To Test Commiting project copy
 np.set_printoptions(precision=None, threshold=10000, edgeitems=None, linewidth=600, suppress=None, nanstr=None,
 
                     infstr=None, formatter=None, sign=None, floatmode=None, legacy=None)
@@ -508,9 +508,11 @@ class StrategyForCfr:
             saving_points = self.saving_points
         if start_age_index is None:
             start_age_index = self.last_saved_index_in_saved_arrays_1d0d[0]
+        start_of_total_time_perf_ns = time.perf_counter_ns()
         for index_age in range(int(start_age_index+1), len(saving_points)):
-            # print(f'Start Of Running {saving_points[index_age-1]} UP TO {saving_points[index_age]}')
-            # print("\n")
+            print(f"Start Of Running {saving_points[index_age-1]} UP TO {saving_points[index_age]}"
+                  f"\n"
+                  f"at {time.asctime()}")
             t_perf_ns_start = time.perf_counter_ns()
             t_process_ns_start = time.process_time_ns()
             rt = self.run_base_vcfr(saving_points[index_age] - saving_points[index_age-1])
@@ -519,20 +521,22 @@ class StrategyForCfr:
             self.strategy_data_array[index_age, 1, :, :, :] = self.cumulative_strategy.copy()
             self.strategy_data_array[index_age, 2, :, :, :] = self.average_strategy().copy()
 
+            self.save_points_array[0, 0] = index_age
+            self.save_points_array[0, 1] = saving_points[index_age]
+
             self.save_points_array[index_age, 0] = saving_points[index_age]
             self.save_points_array[index_age, 1] = rt[0]
             self.save_points_array[index_age, 2] = rt[1]
             self.save_points_array[index_age, 3] = time.perf_counter_ns() - t_perf_ns_start
             self.save_points_array[index_age, 4] = time.process_time_ns() - t_process_ns_start
 
-            self.save_points_array[0, 0] = index_age
-            self.save_points_array[0, 1] = saving_points[index_age]
-
+            self.save_points_array[0, 2] += time.perf_counter_ns() - t_perf_ns_start
             np.save(self.strategy_data_array_path, self.strategy_data_array)
             np.save(self.save_points_array_path, self.save_points_array)
             print("\n")
             print(f"ran vcfr for {self.name} from {saving_points[index_age-1]} UP TO {saving_points[index_age]}"
-                  f"in {(time.perf_counter_ns()-t_perf_ns_start)/1e9} Seconds")
+                  f" in {(time.perf_counter_ns()-t_perf_ns_start)/1e9} Seconds \n"
+                  f"at {time.asctime()}")
             print("\n")
 
 
@@ -568,19 +572,23 @@ class StrategyForCfr:
 # -------------------------------------------------------------------------------------------------------------------- #
 # ------------------------------- INITIALIZING STRATEGIC BETTING GAMES WITH USUAL SIZES ------------------------------ #
 
+# -------------------------------------------------------------------------------------------------------------------- #
+# ---------------------------- OLD: RUNNING FAMILY OF StrategyForCfr BY run_base_cfr METHOD -------------------------- #
 
-def bet_family_cfr_run_time(max, number_of_hands, sub, bet_family=MY_FAMILY_OF_BETS, iterations=10):
-    bf = [BettingGame(max, {i: 1 for i in range(number_of_hands)}, sub, b / 100) for b in bet_family]
+
+def bet_family_cfr_run_time(max_n_bets, number_of_hands, sub, bet_family=STANDARD_FULL_FAMILY_OF_BETS, iterations=10):
+    bf = [BettingGame(max_n_bets, {i: 1 for i in range(number_of_hands)}, sub, b / 100) for b in bet_family]
     sbf = [StrategyForCfr(bf[i]) for i in range(len(bet_family))]
     rbf = [sbf[i].run_base_cfr(iterations) for i in range(len(bet_family))]
     return rbf
 
 
-def bet_hand_family_cfr_run_time(max, sub, n_hands_family=range(3, 101), bet_family=MY_FAMILY_OF_BETS, iterations=10):
+def bet_hand_family_cfr_run_time(max_n_bets, sub, n_hands_family=range(3, 101), bet_family=MY_FAMILY_OF_BETS,
+                                 iterations=10):
     matrix = np.zeros((len(n_hands_family), len(bet_family)))
     for nh_index in range(len(n_hands_family)):
         matrix[nh_index, :] = np.array(
-            bet_family_cfr_run_time(max, n_hands_family[nh_index], sub, bet_family, iterations))
+            bet_family_cfr_run_time(max_n_bets, n_hands_family[nh_index], sub, bet_family, iterations))
     return matrix
 
 
@@ -595,11 +603,25 @@ def max_bet_hand_family_cfr_run_time(sub, max_family=range(2, 21, 2), n_hands_fa
 
 
 # -------------------------------------------------------------------------------------------------------------------- #
+# -------------------------------------------- ANALYZING SAVED DATA -------------------------------------------------- #
+
+
+class StrategySavedDataAnalyzer:
+    def __init__(self, path_of_strategy_array, path_of_saving_points_array, last_filled_index=None):
+        self.path_of_strategy_array = path_of_strategy_array
+        self.path_of_saving_points_array = path_of_saving_points_array
+        self.saving_points_array = np.load(self.path_of_saving_points_array)
+        if last_filled_index is None:
+            last_filled_index = self.saving_points_array[0, 0]
+        self.n_of_saves = last_filled_index
+        self.strategy_array = np.load(self.path_of_strategy_array)[:self.n_of_saves, ...]
+
+# -------------------------------------------------------------------------------------------------------------------- #
 # ------------------------ INITIALIZING SPECIFIC EXAMPLES FOR BETTING GAMES WITH USUAL SIZES ------------------------- #
 
 # if __name__ == '__main__':
-    # KUHN_ORIG = BettingGame(2, {i: 1 for i in range(3)}, False, 1)
-    # KUHN_ORIG_STRATEGY = StrategyForCfr(KUHN_ORIG)
+#     KUHN_ORIG = BettingGame(2, {i: 1 for i in range(3)}, False, 1)
+#     KUHN_ORIG_STRATEGY = StrategyForCfr(KUHN_ORIG)
     # KUHN_ORIG_STRATEGY_2 = StrategyForCfr(KUHN_ORIG, naming_key='2')
     # s = KUHN_ORIG_STRATEGY
     # s2 = KUHN_ORIG_STRATEGY_2
@@ -609,6 +631,10 @@ def max_bet_hand_family_cfr_run_time(sub, max_family=range(2, 21, 2), n_hands_fa
     # kr = KUHN_ORIG_REAL_STRATEGY
     # BIG_GAME = BettingGame(20, {i:1 for i in range(400)}, True, 27)
     # BIG_GAME_STRATEGY = StrategyForCfr(BIG_GAME)
+
+
+
+
 
 
     # sb = np.load(KUHN_ORIG_STRATEGY.strategy_data_array_path)
