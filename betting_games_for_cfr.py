@@ -91,7 +91,7 @@ class BettingGame(BettingGameWorldTree):
             for op_hand in self.deck.keys()], dtype=np.float64)
         self.name = "BG" + "_" + "max" + str(self.max_number_of_bets) + "_" + "deck" + str(
             self.number_of_hands) + "_" + "sub" + str(deal_from_deck_with_substitution) + "_" + "bet" + str(
-            self.bet_size * 100)
+            int(self.bet_size * 100 + 0.01))
 
     def terminal_value(self, node, op_hand, ip_hand, _bet_size=None):
         if not self.public_state[node].is_terminal:
