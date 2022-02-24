@@ -533,10 +533,14 @@ class StrategyForCfr:
             self.save_points_array[0, 2] += time.perf_counter_ns() - t_perf_ns_start
             np.save(self.strategy_data_array_path, self.strategy_data_array)
             np.save(self.save_points_array_path, self.save_points_array)
+            this_boot_time = (time.perf_counter_ns() - start_of_total_time_perf_ns)
+            this_boot_iterations = saving_points[index_age] - saving_points[start_age_index]
             print("\n")
             print(f"ran vcfr for {self.name} from {saving_points[index_age-1]} UP TO {saving_points[index_age]}"
                   f" in {(time.perf_counter_ns()-t_perf_ns_start)/1e9} Seconds \n"
-                  f"at {time.asctime()}")
+                  f"at {time.asctime()} \n"
+                  f"Speed So far is {this_boot_time/(this_boot_iterations*3600)} Hours/BillionIter \n")
+                  # f" Or {this_boot_time/(1e6*this_boot_iterations)}")
             print("\n")
 
 
