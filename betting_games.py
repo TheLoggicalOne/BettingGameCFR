@@ -242,8 +242,8 @@ class BettingGame:
 # Start a Game
 if __name__ == '__main__':
     # Creating Kuhn Poker
-    J = 0;
-    Q = 1;
+    J = 0
+    Q = 1
     K = 2
     KUHN_BETTING_GAME = BettingGame(bet_size=0.5, max_number_of_bets=2,
                                     deck={J: 1, Q: 1, K: 1}, deal_from_deck_with_substitution=False)
